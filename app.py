@@ -50,13 +50,15 @@ app = Dash(__name__)
 app.layout = html.Div(
     [
         html.H1('Know Your Representatives in Congress'),
-        dcc.Dropdown(id = 'dropdown', options=dropdown_options, value='M001239'),
+        dcc.Dropdown(id = 'dropdown', options=dropdown_options, value='M001239'), # Step 1 of callback
         dcc.Tabs(
             [
                 dcc.Tab(label = 'Contact and Bio Info', children = [
-                    html.Img(id = 'bioimage')
+                    html.Img(id = 'bioimage') # Step 5 - give this to the 'src' element of html tag
                 ]),
-                dcc.Tab(label = 'How They Vote', children = []),
+                dcc.Tab(label = 'How They Vote', children = [
+                    dcc.Graph(id = 'vote_scatter')
+                ]),
                 dcc.Tab(label = 'Who Spends Money on Them?', children = []),
                 dcc.Tab(label = 'What Bills Do They Sponsor?', children = [])
             ]
@@ -66,10 +68,18 @@ app.layout = html.Div(
 
 # Define the callbacks: functions that map a user's action to a result on the dashboard
 
-@app.callback([Output(component_id = 'bioimage', component_property = 'src')], 
-              [Input(component_id = 'dropdown', component_property = 'value')])
+# Step 1: the dropdown is defined above
+# Step 2: the input in the callback below
+# Step 3: the function after the callback is called
+# Step 4: the output step in the callback below
+# Step 5: put the bio image in the html on the app
+
+# Decorator applies this callback to the next function defined (get_image)
+@app.callback([Output(component_id = 'bioimage', component_property = 'src')], # Step 4 - output
+              [Input(component_id = 'dropdown', component_property = 'value')]) # Step 2 - input
 
 # get the url for the image of a particular member with the bioguide_id
+# Step 3 - convert user input into output
 def get_image(b):
     myquery = f'''
         SELECT image
@@ -78,6 +88,31 @@ def get_image(b):
     '''
     image_url = pd.read_sql_query(myquery, con=engine)['image'][0]
     return [image_url]
+
+@app.callback([Output(component_id = 'vote_scatter', component_property = 'figure')],
+              [Input(component_id = 'dropdown', component_property = 'value')])
+
+# make an agreement vs left/right ideology scatter plot for a given member
+def make_scatterplot(b):
+    myquery = f'''
+        SELECT 
+            vc.icpsr_comparison_member,
+            vc.agree
+        FROM
+            vote_compare vc
+        INNER JOIN crosswalk c
+            ON vc.icpsr_member = c.icpsr
+        WHERE icpsr_member = (
+            SELECT icpsr
+            FROM crosswalk
+            WHERE bioguide_id = '{b}'
+        )
+    '''
+    scatter_data = pd.read_sql_query(myquery, con=engine)
+    fig = px.scatter(scatter_data,
+                     x = 'left_right_ideology',
+                     y = 'agree')
+    return [fig]
 
 # Run the dashboard
 if __name__ == '__main__':
